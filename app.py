@@ -12,9 +12,16 @@ import subprocess
 import requests
 import threading
 from datetime import datetime, timedelta
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, send_from_directory
 
 app = Flask(__name__)
+
+@app.route('/favicon.ico')
+@app.route('/favicon-<size>.png')
+@app.route('/apple-touch-icon.png')
+def favicon(size=None):
+    return send_from_directory(os.path.dirname(os.path.abspath(__file__)),
+        request.path.lstrip('/'), mimetype='image/png' if size else 'image/x-icon')
 
 OLLAMA_URL = "http://localhost:11434"
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8791345433:AAFPbDEZYOBRWN9xzI8HCOoZCIgjxz-PHyw")
