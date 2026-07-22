@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.svg" alt="ServerPulse" width="100%"/>
+  <img src="img/logo.png" alt="ServerPulse" width="400"/>
 </p>
 
 <p align="center">
@@ -28,7 +28,11 @@
 ## Screenshots
 
 <p align="center">
-  <img src="logo.svg" alt="Dashboard Preview" width="600"/>
+  <img src="img/index.png" alt="Dashboard" width="800"/>
+</p>
+
+<p align="center">
+  <img src="img/graphs.png" alt="Graphs" width="800"/>
 </p>
 
 ## Quick Start
@@ -98,9 +102,14 @@ serverpulse/
 ├── templates/
 │   ├── index.html         # Dashboard UI
 │   └── graphs.html        # Live graphs page
+├── img/
+│   ├── logo.png           # Project logo
+│   ├── icon.png           # Project icon
+│   ├── index.png          # Dashboard screenshot
+│   └── graphs.png         # Graphs screenshot
 ├── dashboard.service      # Systemd service file
 ├── requirements.txt       # Python dependencies
-├── logo.svg               # Project logo
+├── favicon.ico            # Favicon (multi-size)
 ├── LICENSE                # MIT License
 └── README.md              # This file
 ```
