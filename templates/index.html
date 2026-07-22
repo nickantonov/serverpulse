@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Server Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0e17; --card: #111827; --card-border: #1e293b;
+    --text: #e2e8f0; --text-dim: #64748b; --accent: #3b82f6;
+    --green: #22c55e; --yellow: #eab308; --red: #ef4444;
+    --cyan: #06b6d4; --purple: #a855f7; --orange: #f97316; --pink: #ec4899;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+    background: var(--bg); color: var(--text); min-height: 100vh;
+  }
+  .bg-grid {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background-image:
+      linear-gradient(rgba(59,130,246,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(59,130,246,0.03) 1px, transparent 1px);
+    background-size: 50px 50px; pointer-events: none; z-index: 0;
+  }
+  .container { max-width: 1440px; margin: 0 auto; padding: 20px; position: relative; z-index: 1; }
+
+  /* ── Header ── */
+  header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 0 24px; border-bottom: 1px solid var(--card-border); margin-bottom: 24px;
+  }
+  header h1 { font-size: 1.4rem; font-weight: 700; }
+  header h1 span { color: var(--accent); }
+  .header-right { display: flex; align-items: center; gap: 10px; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; animation: pulse 2s infinite; }
+  .status-dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .status-dot.offline { background: var(--red); box-shadow: 0 0 8px var(--red); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .timestamp { color: var(--text-dim); font-size: 0.82rem; }
+  .btn-nav {
+    background: #1e293b; border: 1px solid #334155; color: var(--text);
+    padding: 7px 16px; border-radius: 8px; cursor: pointer;
+    font-family: inherit; font-size: 0.82rem; text-decoration: none; transition: all 0.2s;
+  }
+  .btn-nav:hover { background: #334155; border-color: var(--accent); }
+  .btn-nav.active { background: var(--accent); border-color: var(--accent); color: white; }
+  .btn-update {
+    background: linear-gradient(135deg, #7c3aed, #a855f7);
+    border: none; color: white; padding: 7px 16px; border-radius: 8px;
+    cursor: pointer; font-family: inherit; font-size: 0.82rem; transition: all 0.2s;
+  }
+  .btn-update:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(124,58,237,0.3); }
+  .btn-tg {
+    background: linear-gradient(135deg, #0088cc, #229ed9);
+    border: none; color: white; padding: 7px 16px; border-radius: 8px;
+    cursor: pointer; font-family: inherit; font-size: 0.82rem; transition: all 0.2s;
+  }
+  .btn-tg:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(0,136,204,0.3); }
+
+  /* ── Section titles ── */
+  .section-title {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 3px;
+    color: var(--text-dim); margin-bottom: 16px; padding-left: 4px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--card-border), transparent); }
+
+  /* ── Donut row ── */
+  .donut-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;
+  }
+  .donut-card {
+    background: var(--card); border: 1px solid var(--card-border);
+    border-radius: 12px; padding: 24px; display: flex;
+    align-items: center; gap: 24px; position: relative; overflow: hidden;
+  }
+  .donut-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--cyan), transparent); opacity: 0.6;
+  }
+  .donut-card.purple::before { background: linear-gradient(90deg, transparent, var(--purple), transparent); }
+  .donut-wrap { position: relative; width: 160px; height: 160px; flex-shrink: 0; }
+  .donut-center {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    text-align: center; pointer-events: none;
+  }
+  .donut-center .pct { font-size: 1.8rem; font-weight: 700; }
+  .donut-center .label { font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+  .donut-info { flex: 1; }
+  .donut-info h3 { font-size: 0.85rem; font-weight: 600; margin-bottom: 12px; }
+  .donut-stat { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(30,41,59,0.5); font-size: 0.8rem; }
+  .donut-stat:last-child { border-bottom: none; }
+  .donut-stat .val { font-weight: 600; }
+
+  /* ── Cards grid (4 cols) ── */
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .card {
+    background: var(--card); border: 1px solid var(--card-border);
+    border-radius: 12px; padding: 20px; position: relative; overflow: hidden;
+    transition: border-color 0.3s;
+  }
+  .card:hover { border-color: var(--accent); }
+  .card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0; transition: opacity 0.3s;
+  }
+  .card:hover::before { opacity: 1; }
+  .card-title {
+    font-size: 0.68rem; text-transform: uppercase; letter-spacing: 2px;
+    color: var(--text-dim); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+  }
+  .card-title .icon { font-size: 1rem; }
+  .metric-big { font-size: 2rem; font-weight: 700; line-height: 1; }
+  .metric-label { font-size: 0.75rem; color: var(--text-dim); margin-top: 4px; }
+  .bar-container { margin-top: 12px; }
+  .bar-bg { background: #1e293b; border-radius: 6px; height: 10px; overflow: hidden; }
+  .bar-fill {
+    height: 100%; border-radius: 6px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); position: relative;
+  }
+  .bar-fill::after {
+    content: ''; position: absolute; top: 0; right: 0; bottom: 0; width: 30px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2));
+  }
+  .bar-fill.green { background: linear-gradient(90deg, #16a34a, #22c55e); }
+  .bar-fill.yellow { background: linear-gradient(90deg, #ca8a04, #eab308); }
+  .bar-fill.red { background: linear-gradient(90deg, #dc2626, #ef4444); }
+  .bar-stats { display: flex; justify-content: space-between; margin-top: 6px; font-size: 0.72rem; color: var(--text-dim); }
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .detail-item { padding: 8px; background: rgba(30,41,59,0.5); border-radius: 6px; }
+  .detail-label { font-size: 0.62rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+  .detail-value { font-size: 0.95rem; font-weight: 600; margin-top: 2px; }
+  .load-bars { display: flex; gap: 8px; margin-top: 12px; }
+  .load-item { flex: 1; text-align: center; }
+  .load-value { font-size: 1.1rem; font-weight: 700; }
+  .load-label { font-size: 0.65rem; color: var(--text-dim); }
+  .net-stats { display: flex; gap: 20px; margin-top: 10px; }
+  .net-item { display: flex; align-items: center; gap: 6px; }
+  .net-arrow { font-size: 1.1rem; }
+  .net-arrow.up { color: var(--green); }
+  .net-arrow.down { color: var(--cyan); }
+  .net-val { font-size: 1rem; font-weight: 600; }
+  .net-unit { font-size: 0.68rem; color: var(--text-dim); }
+
+  /* ── Ollama ── */
+  .ollama-status {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600;
+  }
+  .ollama-status.online { background: rgba(34,197,94,0.15); color: var(--green); }
+  .ollama-status.offline { background: rgba(239,68,68,0.15); color: var(--red); }
+  .model-card {
+    background: rgba(30,41,59,0.5); border-radius: 8px; padding: 10px 14px;
+    border: 1px solid transparent; transition: border-color 0.2s;
+  }
+  .model-card:hover { border-color: var(--accent); }
+  .model-name { font-weight: 600; font-size: 0.82rem; }
+  .model-meta { font-size: 0.68rem; color: var(--text-dim); margin-top: 2px; }
+  .model-size {
+    background: rgba(59,130,246,0.15); color: var(--accent); padding: 3px 10px;
+    border-radius: 12px; font-size: 0.7rem; font-weight: 600; display: inline-block; margin-top: 4px;
+  }
+  .running-badge {
+    background: rgba(34,197,94,0.15); color: var(--green); padding: 3px 10px;
+    border-radius: 12px; font-size: 0.65rem; font-weight: 600; animation: pulse 2s infinite; display: inline-block; margin-top: 4px;
+  }
+  .proc-card {
+    background: var(--card); border: 1px solid var(--card-border);
+    border-radius: 12px; padding: 20px; position: relative; overflow: hidden;
+  }
+  .proc-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--purple), transparent); opacity: 0.6;
+  }
+  .proc-table { width: 100%; margin-top: 12px; border-collapse: collapse; }
+  .proc-table th {
+    text-align: left; font-size: 0.65rem; text-transform: uppercase;
+    letter-spacing: 1px; color: var(--text-dim); padding: 8px 0;
+    border-bottom: 1px solid var(--card-border);
+  }
+  .proc-table td { padding: 5px 0; font-size: 0.78rem; border-bottom: 1px solid rgba(30,41,59,0.5); }
+  .proc-table td:nth-child(1) { color: var(--cyan); }
+  .proc-bar { height: 4px; border-radius: 2px; background: #1e293b; overflow: hidden; min-width: 60px; }
+  .proc-bar-fill { height: 100%; border-radius: 2px; background: var(--accent); }
+  .temp-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: rgba(30,41,59,0.5); padding: 3px 8px; border-radius: 6px;
+    font-size: 0.75rem; margin: 3px;
+  }
+
+  /* ── Update modal ── */
+  .modal-overlay {
+    display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 1000;
+    justify-content: center; align-items: center;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal {
+    background: #111827; border: 1px solid #1e293b; border-radius: 16px;
+    padding: 32px; width: 480px; max-width: 95vw; position: relative;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+  }
+  .modal h2 { font-size: 1.1rem; margin-bottom: 8px; }
+  .modal p { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 20px; }
+  .modal-input {
+    width: 100%; padding: 12px 16px; border-radius: 10px;
+    border: 1px solid #334155; background: #0f172a; color: var(--text);
+    font-family: inherit; font-size: 0.9rem; outline: none; transition: border-color 0.2s;
+  }
+  .modal-input:focus { border-color: var(--accent); }
+  .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+  .modal-btn {
+    flex: 1; padding: 12px; border-radius: 10px; border: none;
+    font-family: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.2s;
+  }
+  .modal-btn.primary { background: linear-gradient(135deg, #7c3aed, #a855f7); color: white; }
+  .modal-btn.primary:hover { box-shadow: 0 4px 20px rgba(124,58,237,0.4); }
+  .modal-btn.secondary { background: #1e293b; color: var(--text-dim); }
+  .modal-btn.secondary:hover { background: #334155; }
+  .modal-close {
+    position: absolute; top: 16px; right: 16px; background: none; border: none;
+    color: var(--text-dim); font-size: 1.3rem; cursor: pointer; line-height: 1;
+  }
+  .modal-close:hover { color: var(--text); }
+  .update-log {
+    margin-top: 16px; max-height: 200px; overflow-y: auto;
+    background: #0f172a; border-radius: 8px; padding: 12px; font-size: 0.75rem;
+    display: none;
+  }
+  .update-log.active { display: block; }
+  .update-log-entry { padding: 3px 0; border-bottom: 1px solid rgba(30,41,59,0.3); display: flex; gap: 8px; }
+  .update-log-entry .time { color: var(--cyan); min-width: 60px; }
+  .update-log-entry .msg { color: var(--text); }
+  .update-encrypt-badge {
+    display: inline-flex; align-items: center; gap: 4px; font-size: 0.65rem;
+    color: var(--green); background: rgba(34,197,94,0.1); padding: 2px 8px;
+    border-radius: 6px; margin-top: 8px;
+  }
+
+  /* ── Uptime badge ── */
+  .uptime-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.2);
+    padding: 5px 12px; border-radius: 8px; font-size: 0.78rem; color: var(--green);
+  }
+  .uptime-badge .icon { font-size: 0.9rem; }
+
+  /* ── Reboot button ── */
+  .btn-reboot {
+    background: linear-gradient(135deg, #dc2626, #ef4444);
+    border: none; color: white; padding: 7px 16px; border-radius: 8px;
+    cursor: pointer; font-family: inherit; font-size: 0.82rem; transition: all 0.2s;
+  }
+  .btn-reboot:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(220,38,38,0.3); }
+
+  /* ── Logs modal ── */
+  .logs-modal {
+    display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 1000;
+    justify-content: center; align-items: center;
+  }
+  .logs-modal.active { display: flex; }
+  .logs-content {
+    background: #111827; border: 1px solid #1e293b; border-radius: 16px;
+    padding: 24px; width: 900px; max-width: 95vw; max-height: 85vh;
+    display: flex; flex-direction: column; position: relative;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+  }
+  .logs-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .logs-header h2 { font-size: 1rem; }
+  .logs-controls { display: flex; gap: 8px; align-items: center; }
+  .logs-select {
+    background: #0f172a; border: 1px solid #334155; color: var(--text);
+    padding: 6px 10px; border-radius: 6px; font-family: inherit; font-size: 0.75rem;
+  }
+  .logs-body {
+    flex: 1; overflow-y: auto; background: #0f172a; border-radius: 8px;
+    padding: 12px; font-size: 0.72rem; font-family: 'JetBrains Mono', monospace;
+    max-height: 60vh;
+  }
+  .log-line { padding: 2px 0; border-bottom: 1px solid rgba(30,41,59,0.2); display: flex; gap: 8px; white-space: nowrap; }
+  .log-line:hover { background: rgba(59,130,246,0.05); }
+  .log-line .t { color: var(--cyan); min-width: 140px; flex-shrink: 0; }
+  .log-line .svc { color: var(--purple); min-width: 120px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; }
+  .log-line .m { color: var(--text-dim); flex: 1; overflow: hidden; text-overflow: ellipsis; }
+  .logs-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 0.7rem; color: var(--text-dim); }
+  .btn-sm {
+    padding: 5px 12px; border-radius: 6px; border: 1px solid #334155;
+    background: #1e293b; color: var(--text); cursor: pointer; font-family: inherit; font-size: 0.72rem;
+    transition: all 0.2s;
+  }
+  .btn-sm:hover { background: #334155; border-color: var(--accent); }
+
+  /* ── Responsive ── */
+  @media (max-width: 1100px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 768px) {
+    .grid { grid-template-columns: 1fr 1fr; }
+    .donut-row { grid-template-columns: 1fr; }
+    header { flex-direction: column; gap: 12px; text-align: center; }
+    .metric-big { font-size: 1.6rem; }
+  }
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="container">
+  <header>
+    <h1><span>//</span> Server Dashboard</h1>
+    <div class="header-right">
+      <div class="uptime-badge"><span class="icon">⏱</span> <span id="headerUptime">--</span></div>
+      <span class="status-dot" id="ollamaDot"></span>
+      <span class="timestamp" id="ts">loading...</span>
+      <a href="/graphs" class="btn-nav">Graphs</a>
+      <button class="btn-nav" onclick="openLogsModal()">Logs</button>
+      <button class="btn-update" onclick="openUpdateModal()">Update</button>
+      <button class="btn-reboot" onclick="openRebootModal()">Reboot</button>
+      <button class="btn-tg" onclick="sendTelegram()">Telegram</button>
+    </div>
+  </header>
+
+  <!-- ═══ DISK + RAM DONUTS ═══ -->
+  <div class="section-title">Моніторинг ресурсів</div>
+  <div class="donut-row">
+    <div class="donut-card">
+      <div class="donut-wrap">
+        <canvas id="diskDonut"></canvas>
+        <div class="donut-center">
+          <div class="pct" id="donutPct">--</div>
+          <div class="label">Disk</div>
+        </div>
+      </div>
+      <div class="donut-info">
+        <h3>Дисковий простір</h3>
+        <div class="donut-stat"><span>Використано</span><span class="val" id="donutUsed">--</span></div>
+        <div class="donut-stat"><span>Вільно</span><span class="val" id="donutFree">--</span></div>
+        <div class="donut-stat"><span>Всього</span><span class="val" id="donutTotal">--</span></div>
+      </div>
+    </div>
+    <div class="donut-card purple">
+      <div class="donut-wrap">
+        <canvas id="memDonut"></canvas>
+        <div class="donut-center">
+          <div class="pct" id="memDonutPct">--</div>
+          <div class="label">RAM</div>
+        </div>
+      </div>
+      <div class="donut-info">
+        <h3>Оперативна пам'ять</h3>
+        <div class="donut-stat"><span>Використано</span><span class="val" id="memDonutUsed">--</span></div>
+        <div class="donut-stat"><span>Swap</span><span class="val" id="memDonutSwap">--</span></div>
+        <div class="donut-stat"><span>Всього</span><span class="val" id="memDonutTotal">--</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ STAT CARDS ═══ -->
+  <div class="section-title">Системні ресурси</div>
+  <div class="grid">
+    <!-- CPU -->
+    <div class="card">
+      <div class="card-title"><span class="icon">CPU</span> Процесор</div>
+      <div class="metric-big" id="cpuPct">--</div>
+      <div class="metric-label"><span id="cpuCores">-</span> cores | <span id="cpuFreq">-</span> MHz</div>
+      <div class="bar-container">
+        <div class="bar-bg"><div class="bar-fill green" id="cpuBar" style="width:0%"></div></div>
+      </div>
+      <div class="load-bars">
+        <div class="load-item"><div class="load-value" id="load1">-</div><div class="load-label">1 min</div></div>
+        <div class="load-item"><div class="load-value" id="load5">-</div><div class="load-label">5 min</div></div>
+        <div class="load-item"><div class="load-value" id="load15">-</div><div class="load-label">15 min</div></div>
+      </div>
+    </div>
+    <!-- RAM -->
+    <div class="card">
+      <div class="card-title"><span class="icon">RAM</span> Пам'ять</div>
+      <div class="metric-big" id="memPct">--</div>
+      <div class="metric-label"><span id="memUsed">-</span> / <span id="memTotal">-</span> GB</div>
+      <div class="bar-container">
+        <div class="bar-bg"><div class="bar-fill green" id="memBar" style="width:0%"></div></div>
+        <div class="bar-stats"><span>Used</span><span id="memAvail">-</span></div>
+      </div>
+      <div style="margin-top:12px">
+        <div class="card-title" style="margin-bottom:6px"><span class="icon">SWAP</span> Swap</div>
+        <div class="bar-container">
+          <div class="bar-bg"><div class="bar-fill green" id="swapBar" style="width:0%"></div></div>
+          <div class="bar-stats"><span id="swapPct">-</span><span id="swapDetail">-</span></div>
+        </div>
+      </div>
+    </div>
+    <!-- Disk -->
+    <div class="card">
+      <div class="card-title"><span class="icon">DISK</span> Сховище</div>
+      <div class="metric-big" id="diskPct">--</div>
+      <div class="metric-label"><span id="diskUsed">-</span> / <span id="diskTotal">-</span> GB</div>
+      <div class="bar-container">
+        <div class="bar-bg"><div class="bar-fill green" id="diskBar" style="width:0%"></div></div>
+      </div>
+      <div class="detail-grid">
+        <div class="detail-item"><div class="detail-label">Uptime</div><div class="detail-value" id="uptime">-</div></div>
+        <div class="detail-item"><div class="detail-label">Temp</div><div class="detail-value" id="temp">-</div></div>
+      </div>
+    </div>
+    <!-- Network -->
+    <div class="card">
+      <div class="card-title"><span class="icon">NET</span> Мережа</div>
+      <div class="net-stats">
+        <div class="net-item"><span class="net-arrow up">↑</span><div><div class="net-val" id="netSent">-</div><div class="net-unit">MB sent</div></div></div>
+        <div class="net-item"><span class="net-arrow down">↓</span><div><div class="net-val" id="netRecv">-</div><div class="net-unit">MB recv</div></div></div>
+      </div>
+      <div class="detail-grid" style="margin-top:16px">
+        <div class="detail-item"><div class="detail-label">Total RAM</div><div class="detail-value" id="ramGB">-</div></div>
+        <div class="detail-item"><div class="detail-label">Total Disk</div><div class="detail-value" id="diskGB">-</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ OLLAMA ═══ -->
+  <div class="section-title">AI Моделі</div>
+  <div style="margin-bottom:24px">
+    <div class="proc-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div class="card-title" style="margin-bottom:0"><span class="icon">OLLAMA</span> AI Engine</div>
+        <span class="ollama-status" id="ollamaStatus">--</span>
+      </div>
+      <div id="modelsContainer" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px"></div>
+    </div>
+  </div>
+
+  <!-- ═══ PROCESSES ═══ -->
+  <div class="section-title">Топ процеси</div>
+  <div style="margin-bottom:24px">
+    <div class="proc-card">
+      <table class="proc-table">
+        <thead><tr><th>PID</th><th>Назва</th><th>CPU %</th><th style="width:100px">CPU</th><th>RAM %</th><th style="width:100px">RAM</th><th>Статус</th></tr></thead>
+        <tbody id="procBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Update Modal ═══ -->
+<div class="modal-overlay" id="updateModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeUpdateModal()">&times;</button>
+    <h2>Оновлення системи</h2>
+    <p>Введіть sudo-пароль для запуску оновлення пакетів</p>
+    <input type="password" class="modal-input" id="updatePwd" placeholder="sudo password" autocomplete="off">
+    <div class="update-encrypt-badge">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      Шифрування: XOR + one-time token (60s TTL)
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn secondary" onclick="closeUpdateModal()">Скасувати</button>
+      <button class="modal-btn primary" onclick="startUpdate()">Оновити систему</button>
+    </div>
+    <div class="update-log" id="updateLog"></div>
+  </div>
+</div>
+
+<!-- ═══ Logs Modal ═══ -->
+<div class="logs-modal" id="logsModal">
+  <div class="logs-content">
+    <div class="logs-header">
+      <h2>Системні логи</h2>
+      <div class="logs-controls">
+        <select class="logs-select" id="logsUnit" onchange="loadLogs()">
+          <option value="">Усі сервіси</option>
+          <option value="ollama">Ollama</option>
+          <option value="dashboard">Dashboard</option>
+          <option value="nginx">Nginx</option>
+          <option value="sshd">SSH</option>
+          <option value="systemd">Systemd</option>
+          <option value="kernel">Kernel</option>
+        </select>
+        <select class="logs-select" id="logsLines" onchange="loadLogs()">
+          <option value="50">50 рядків</option>
+          <option value="100" selected>100 рядків</option>
+          <option value="200">200 рядків</option>
+          <option value="500">500 рядків</option>
+        </select>
+        <button class="btn-sm" onclick="loadLogs()">Оновити</button>
+        <button class="btn-nav" onclick="closeLogsModal()">&times;</button>
+      </div>
+    </div>
+    <div class="logs-body" id="logsBody">Завантаження...</div>
+    <div class="logs-footer">
+      <span id="logsCount">--</span>
+      <span>Auto-refresh: <button class="btn-sm" id="logsAutoBtn" onclick="toggleLogsAuto()">ON</button></span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Reboot Modal ═══ -->
+<div class="modal-overlay" id="rebootModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeRebootModal()">&times;</button>
+    <h2>Перезавантаження системи</h2>
+    <p>Введіть sudo-пароль для перезавантаження сервера</p>
+    <input type="password" class="modal-input" id="rebootPwd" placeholder="sudo password" autocomplete="off">
+    <div class="update-encrypt-badge">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      Шифрування: XOR + one-time token (60s TTL)
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn secondary" onclick="closeRebootModal()">Скасувати</button>
+      <button class="modal-btn primary" style="background:linear-gradient(135deg,#dc2626,#ef4444)" onclick="startReboot()">Перезавантажити</button>
+    </div>
+    <div class="update-log" id="rebootLog"></div>
+  </div>
+</div>
+
+<script>
+// ── Donut charts ──
+Chart.defaults.color = '#64748b';
+Chart.defaults.borderColor = 'rgba(30,41,59,0.5)';
+Chart.defaults.font.family = "'JetBrains Mono', monospace";
+
+function makeDonut(canvasId) {
+  return new Chart(document.getElementById(canvasId), {
+    type: 'doughnut',
+    data: { labels: ['Used', 'Free'], datasets: [{ data: [0, 100], backgroundColor: ['#3b82f6', '#1e293b'], borderWidth: 0, borderRadius: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false, cutout: '72%', plugins: { legend: { display: false }, tooltip: { enabled: true } }, animation: { animateRotate: true, duration: 600 } }
+  });
+}
+const diskDonut = makeDonut('diskDonut');
+const memDonut = makeDonut('memDonut');
+
+function getBarColor(pct) { return pct < 50 ? 'green' : pct < 80 ? 'yellow' : 'red'; }
+function setBar(id, pct) { const el = document.getElementById(id); el.style.width = pct + '%'; el.className = 'bar-fill ' + getBarColor(pct); }
+
+function update(data) {
+  const s = data.system;
+  const o = data.ollama;
+
+  document.getElementById('ts').textContent = s.timestamp;
+
+  // Donuts
+  diskDonut.data.datasets[0].data = [s.disk_percent, 100 - s.disk_percent];
+  diskDonut.data.datasets[0].backgroundColor[0] = s.disk_percent > 90 ? '#ef4444' : s.disk_percent > 70 ? '#eab308' : '#3b82f6';
+  diskDonut.update('none');
+  document.getElementById('donutPct').textContent = s.disk_percent + '%';
+  document.getElementById('donutPct').style.color = s.disk_percent > 90 ? '#ef4444' : s.disk_percent > 70 ? '#eab308' : '#e2e8f0';
+  document.getElementById('donutUsed').textContent = s.disk_used + ' GB';
+  document.getElementById('donutFree').textContent = s.disk_free + ' GB';
+  document.getElementById('donutTotal').textContent = s.disk_total + ' GB';
+
+  memDonut.data.datasets[0].data = [s.memory_percent, 100 - s.memory_percent];
+  memDonut.data.datasets[0].backgroundColor[0] = s.memory_percent > 90 ? '#ef4444' : s.memory_percent > 70 ? '#eab308' : '#22c55e';
+  memDonut.update('none');
+  document.getElementById('memDonutPct').textContent = s.memory_percent + '%';
+  document.getElementById('memDonutPct').style.color = s.memory_percent > 90 ? '#ef4444' : s.memory_percent > 70 ? '#eab308' : '#e2e8f0';
+  document.getElementById('memDonutUsed').textContent = s.memory_used + ' GB';
+  document.getElementById('memDonutSwap').textContent = s.swap_used + ' / ' + s.swap_total + ' GB';
+  document.getElementById('memDonutTotal').textContent = s.memory_total + ' GB';
+
+  // Cards
+  document.getElementById('cpuPct').textContent = s.cpu_percent + '%';
+  document.getElementById('cpuCores').textContent = s.cpu_count;
+  document.getElementById('cpuFreq').textContent = s.cpu_freq;
+  setBar('cpuBar', s.cpu_percent);
+  document.getElementById('load1').textContent = s.load_1;
+  document.getElementById('load5').textContent = s.load_5;
+  document.getElementById('load15').textContent = s.load_15;
+
+  document.getElementById('memPct').textContent = s.memory_percent + '%';
+  document.getElementById('memUsed').textContent = s.memory_used;
+  document.getElementById('memTotal').textContent = s.memory_total;
+  setBar('memBar', s.memory_percent);
+  document.getElementById('swapPct').textContent = 'Swap ' + s.swap_percent + '%';
+  document.getElementById('swapDetail').textContent = s.swap_used + ' / ' + s.swap_total + ' GB';
+  setBar('swapBar', s.swap_percent);
+
+  document.getElementById('diskPct').textContent = s.disk_percent + '%';
+  document.getElementById('diskUsed').textContent = s.disk_used;
+  document.getElementById('diskTotal').textContent = s.disk_total;
+  setBar('diskBar', s.disk_percent);
+
+  document.getElementById('netSent').textContent = s.net_sent;
+  document.getElementById('netRecv').textContent = s.net_recv;
+  document.getElementById('uptime').textContent = s.uptime;
+  document.getElementById('ramGB').textContent = s.memory_total + ' GB';
+  document.getElementById('diskGB').textContent = s.disk_total + ' GB';
+
+  if (s.temperatures && Object.keys(s.temperatures).length > 0) {
+    let tempHtml = '';
+    for (const [k, v] of Object.entries(s.temperatures)) {
+      for (const t of v) { tempHtml += '<span class="temp-chip">' + (t.label || k) + ': ' + t.current + '°C</span>'; }
+    }
+    document.getElementById('temp').innerHTML = tempHtml;
+  } else { document.getElementById('temp').textContent = 'N/A'; }
+
+  // Ollama
+  const dot = document.getElementById('ollamaDot');
+  const status = document.getElementById('ollamaStatus');
+  if (o.status === 'online') {
+    dot.className = 'status-dot online'; status.className = 'ollama-status online'; status.innerHTML = '● ONLINE';
+  } else {
+    dot.className = 'status-dot offline'; status.className = 'ollama-status offline'; status.innerHTML = '● OFFLINE';
+  }
+
+  let modelsHtml = '';
+  for (const m of o.models || []) {
+    const sizeGB = (m.size / (1024**3)).toFixed(1);
+    modelsHtml += '<div class="model-card">' +
+      '<div><div class="model-name">' + m.name + '</div>' +
+      '<div class="model-meta">' + (m.details?.family || '?') + ' | ' +
+      (m.details?.parameter_size || '?') + ' | ' +
+      (m.details?.quantization_level || '?') + ' | ctx ' + (m.details?.context_length || '?') + '</div></div>' +
+      '<span class="model-size">' + sizeGB + ' GB</span></div>';
+  }
+  for (const r of o.running || []) {
+    modelsHtml += '<div class="model-card" style="border-color:rgba(34,197,94,0.3)">' +
+      '<div><div class="model-name">' + (r.name || r.model) + '</div>' +
+      '<div class="model-meta">завантажено в VRAM</div></div>' +
+      '<span class="running-badge">● RUNNING</span></div>';
+  }
+  document.getElementById('modelsContainer').innerHTML = modelsHtml;
+
+  // Processes
+  let procHtml = '';
+  for (const p of s.processes || []) {
+    const cpuW = Math.min(p.cpu_percent, 100);
+    const ramW = Math.min(p.memory_percent, 100);
+    procHtml += '<tr>' +
+      '<td>' + p.pid + '</td>' +
+      '<td>' + (p.name || '?').substring(0, 20) + '</td>' +
+      '<td>' + p.cpu_percent.toFixed(1) + '</td>' +
+      '<td><div class="proc-bar"><div class="proc-bar-fill" style="width:' + cpuW + '%"></div></div></td>' +
+      '<td>' + p.memory_percent.toFixed(1) + '</td>' +
+      '<td><div class="proc-bar"><div class="proc-bar-fill" style="width:' + ramW + '%;background:var(--purple)"></div></div></td>' +
+      '<td>' + p.status + '</td></tr>';
+  }
+  document.getElementById('procBody').innerHTML = procHtml;
+}
+
+function fetchData() { fetch('/api/data').then(r => r.json()).then(update).catch(console.error); }
+
+// ── Telegram ──
+function sendTelegram() {
+  const btn = document.querySelector('.btn-tg');
+  btn.textContent = '...';
+  fetch('/api/telegram').then(r => r.json()).then(d => {
+    btn.textContent = d.ok ? 'Sent!' : 'Fail';
+    setTimeout(() => { btn.textContent = 'Telegram'; }, 2000);
+  }).catch(() => { btn.textContent = 'Error'; setTimeout(() => { btn.textContent = 'Telegram'; }, 2000); });
+}
+
+// ── Update modal ──
+function openUpdateModal() { document.getElementById('updateModal').classList.add('active'); document.getElementById('updatePwd').focus(); }
+function closeUpdateModal() { document.getElementById('updateModal').classList.remove('active'); document.getElementById('updatePwd').value = ''; document.getElementById('updateLog').classList.remove('active'); document.getElementById('updateLog').innerHTML = ''; }
+
+function encryptPwd(pwd, token) {
+  const p = new TextEncoder().encode(pwd);
+  const t = new TextEncoder().encode(token);
+  const enc = new Uint8Array(p.length);
+  for (let i = 0; i < p.length; i++) enc[i] = p[i] ^ t[i % t.length];
+  return btoa(String.fromCharCode(...enc));
+}
+
+async function startUpdate() {
+  const pwd = document.getElementById('updatePwd').value;
+  if (!pwd) { document.getElementById('updatePwd').style.borderColor = '#ef4444'; return; }
+  document.getElementById('updatePwd').style.borderColor = '#334155';
+  const btn = document.querySelector('.modal-btn.primary');
+  btn.textContent = 'Токен...'; btn.disabled = true;
+  try {
+    const tokenResp = await fetch('/api/update/token');
+    const tokenData = await tokenResp.json();
+    const encPwd = encryptPwd(pwd, tokenData.token);
+    btn.textContent = 'Оновлення...';
+    const runResp = await fetch('/api/update/run', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enc_pwd: encPwd, token: tokenData.token })
+    });
+    const runData = await runResp.json();
+    if (!runData.ok) { btn.textContent = 'Помилка: ' + runData.error; setTimeout(() => { btn.textContent = 'Оновити'; btn.disabled = false; }, 3000); return; }
+    document.getElementById('updateLog').classList.add('active');
+    btn.textContent = 'Оновлення...';
+    pollUpdateLog();
+  } catch (e) { btn.textContent = 'Помилка'; setTimeout(() => { btn.textContent = 'Оновити'; btn.disabled = false; }, 3000); }
+}
+
+let pollInterval = null;
+function pollUpdateLog() {
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(async () => {
+    try {
+      const resp = await fetch('/api/update/status');
+      const data = await resp.json();
+      const log = document.getElementById('updateLog');
+      log.innerHTML = '';
+      for (const entry of data.log) { log.innerHTML += '<div class="update-log-entry"><span class="time">' + entry.t + '</span><span class="msg">' + entry.msg + '</span></div>'; }
+      log.scrollTop = log.scrollHeight;
+      if (!data.running) { clearInterval(pollInterval); pollInterval = null; document.querySelector('.modal-btn.primary').textContent = 'Готово'; document.querySelector('.modal-btn.primary').disabled = false; }
+    } catch (e) {}
+  }, 2000);
+}
+
+document.getElementById('updateModal').addEventListener('click', function(e) { if (e.target === this) closeUpdateModal(); });
+document.getElementById('updatePwd').addEventListener('keydown', function(e) { if (e.key === 'Enter') startUpdate(); });
+
+// ── Logs modal ──
+let logsAutoRefresh = true;
+let logsAutoInterval = null;
+
+function openLogsModal() {
+  document.getElementById('logsModal').classList.add('active');
+  loadLogs();
+  startLogsAutoRefresh();
+}
+
+function closeLogsModal() {
+  document.getElementById('logsModal').classList.remove('active');
+  stopLogsAutoRefresh();
+}
+
+function toggleLogsAuto() {
+  logsAutoRefresh = !logsAutoRefresh;
+  document.getElementById('logsAutoBtn').textContent = logsAutoRefresh ? 'ON' : 'OFF';
+  if (logsAutoRefresh) startLogsAutoRefresh(); else stopLogsAutoRefresh();
+}
+
+function startLogsAutoRefresh() {
+  stopLogsAutoRefresh();
+  if (logsAutoRefresh) logsAutoInterval = setInterval(loadLogs, 5000);
+}
+
+function stopLogsAutoRefresh() {
+  if (logsAutoInterval) { clearInterval(logsAutoInterval); logsAutoInterval = null; }
+}
+
+async function loadLogs() {
+  try {
+    const unit = document.getElementById('logsUnit').value;
+    const lines = document.getElementById('logsLines').value;
+    const resp = await fetch('/api/logs?lines=' + lines + '&unit=' + encodeURIComponent(unit));
+    const data = await resp.json();
+    const body = document.getElementById('logsBody');
+    let html = '';
+    for (const e of data.entries) {
+      html += '<div class="log-line"><span class="t">' + (e.time || '') + '</span><span class="svc">' + (e.service || '') + '</span><span class="m">' + (e.msg || '') + '</span></div>';
+    }
+    body.innerHTML = html || '<div class="log-line"><span class="m">Немає записів</span></div>';
+    document.getElementById('logsCount').textContent = data.entries.length + ' записів';
+  } catch (e) {
+    document.getElementById('logsBody').innerHTML = '<div class="log-line"><span class="m">Помилка завантаження</span></div>';
+  }
+}
+
+// ── Reboot modal ──
+function openRebootModal() { document.getElementById('rebootModal').classList.add('active'); document.getElementById('rebootPwd').focus(); }
+function closeRebootModal() { document.getElementById('rebootModal').classList.remove('active'); document.getElementById('rebootPwd').value = ''; document.getElementById('rebootLog').classList.remove('active'); document.getElementById('rebootLog').innerHTML = ''; }
+
+async function startReboot() {
+  const pwd = document.getElementById('rebootPwd').value;
+  if (!pwd) { document.getElementById('rebootPwd').style.borderColor = '#ef4444'; return; }
+  document.getElementById('rebootPwd').style.borderColor = '#334155';
+  const btn = document.querySelector('#rebootModal .modal-btn.primary');
+  btn.textContent = 'Токен...'; btn.disabled = true;
+  try {
+    const tokenResp = await fetch('/api/reboot/token');
+    const tokenData = await tokenResp.json();
+    const encPwd = encryptPwd(pwd, tokenData.token);
+    btn.textContent = 'Перезавантаження...';
+    const runResp = await fetch('/api/reboot/run', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enc_pwd: encPwd, token: tokenData.token })
+    });
+    const runData = await runResp.json();
+    if (!runData.ok) { btn.textContent = 'Помилка: ' + runData.error; setTimeout(() => { btn.textContent = 'Перезавантажити'; btn.disabled = false; }, 3000); return; }
+    document.getElementById('rebootLog').classList.add('active');
+    btn.textContent = 'Сервер перезавантажується...';
+    // Poll reboot status
+    const ri = setInterval(async () => {
+      try {
+        const r = await fetch('/api/reboot/status');
+        const d = await r.json();
+        const log = document.getElementById('rebootLog');
+        log.innerHTML = '';
+        for (const entry of d.log) { log.innerHTML += '<div class="update-log-entry"><span class="time">' + entry.t + '</span><span class="msg">' + entry.msg + '</span></div>'; }
+        log.scrollTop = log.scrollHeight;
+      } catch (e) {}
+    }, 2000);
+  } catch (e) { btn.textContent = 'Помилка'; setTimeout(() => { btn.textContent = 'Перезавантажити'; btn.disabled = false; }, 3000); }
+}
+
+document.getElementById('rebootModal').addEventListener('click', function(e) { if (e.target === this) closeRebootModal(); });
+document.getElementById('rebootPwd').addEventListener('keydown', function(e) { if (e.key === 'Enter') startReboot(); });
+
+// ── Update uptime in header ──
+function updateHeaderUptime(s) {
+  document.getElementById('headerUptime').textContent = s.uptime;
+}
+
+const origUpdate = update;
+update = function(data) {
+  origUpdate(data);
+  updateHeaderUptime(data.system);
+};
+
+fetchData();
+setInterval(fetchData, 3000);
+</script>
+</body>
+</html>

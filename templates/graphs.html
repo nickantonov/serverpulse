@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Graphs — Server Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0e17; --card: #111827; --card-border: #1e293b;
+    --text: #e2e8f0; --text-dim: #64748b; --accent: #3b82f6;
+    --green: #22c55e; --yellow: #eab308; --red: #ef4444;
+    --cyan: #06b6d4; --purple: #a855f7; --orange: #f97316; --pink: #ec4899;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+    background: var(--bg); color: var(--text); min-height: 100vh;
+  }
+  .bg-grid {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background-image:
+      linear-gradient(rgba(59,130,246,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(59,130,246,0.03) 1px, transparent 1px);
+    background-size: 50px 50px; pointer-events: none; z-index: 0;
+  }
+  .container { max-width: 1440px; margin: 0 auto; padding: 20px; position: relative; z-index: 1; }
+  header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 0 24px; border-bottom: 1px solid var(--card-border); margin-bottom: 24px;
+  }
+  header h1 { font-size: 1.4rem; font-weight: 700; }
+  header h1 span { color: var(--accent); }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; animation: pulse 2s infinite; }
+  .status-dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .status-dot.offline { background: var(--red); box-shadow: 0 0 8px var(--red); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .timestamp { color: var(--text-dim); font-size: 0.82rem; }
+  .btn-nav {
+    background: #1e293b; border: 1px solid #334155; color: var(--text);
+    padding: 7px 16px; border-radius: 8px; cursor: pointer;
+    font-family: inherit; font-size: 0.82rem; text-decoration: none; transition: all 0.2s;
+  }
+  .btn-nav:hover { background: #334155; border-color: var(--accent); }
+  .btn-nav.active { background: var(--accent); border-color: var(--accent); color: white; }
+  .btn-reboot {
+    background: linear-gradient(135deg, #dc2626, #ef4444);
+    border: none; color: white; padding: 7px 16px; border-radius: 8px;
+    cursor: pointer; font-family: inherit; font-size: 0.82rem; transition: all 0.2s;
+  }
+  .btn-reboot:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(220,38,38,0.3); }
+  .section-title {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: 3px;
+    color: var(--text-dim); margin-bottom: 16px; padding-left: 4px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--card-border), transparent); }
+  .charts-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;
+  }
+  .chart-card {
+    background: var(--card); border: 1px solid var(--card-border);
+    border-radius: 12px; padding: 20px; position: relative; overflow: hidden;
+  }
+  .chart-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: 0.6;
+  }
+  .chart-card.full { grid-column: 1 / -1; }
+  .chart-card-title {
+    font-size: 0.68rem; text-transform: uppercase; letter-spacing: 2px;
+    color: var(--text-dim); margin-bottom: 12px; display: flex;
+    align-items: center; gap: 8px;
+  }
+  .chart-card-title .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .chart-wrap { position: relative; height: 220px; }
+  .chart-wrap.tall { height: 280px; }
+  .stats-row {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px;
+  }
+  .stat-pill {
+    background: var(--card); border: 1px solid var(--card-border);
+    border-radius: 10px; padding: 16px; text-align: center;
+  }
+  .stat-pill .val { font-size: 1.5rem; font-weight: 700; line-height: 1; }
+  .stat-pill .lbl { font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+  @media (max-width: 900px) { .charts-grid { grid-template-columns: 1fr; } .stats-row { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="container">
+  <header>
+    <h1><span>//</span> Server Dashboard <span style="color:var(--text-dim);font-size:0.9rem">/ Графіки</span></h1>
+    <div class="header-right">
+      <span class="status-dot" id="ollamaDot"></span>
+      <span class="timestamp" id="ts">loading...</span>
+      <a href="/" class="btn-nav">Dashboard</a>
+      <span class="btn-nav active">Graphs</span>
+    </div>
+  </header>
+
+  <!-- ═══ LIVE STATS ═══ -->
+  <div class="stats-row">
+    <div class="stat-pill"><div class="val" id="cpuPct" style="color:var(--accent)">--</div><div class="lbl">CPU %</div></div>
+    <div class="stat-pill"><div class="val" id="ramPct" style="color:var(--green)">--</div><div class="lbl">RAM %</div></div>
+    <div class="stat-pill"><div class="val" id="loadVal" style="color:var(--orange)">--</div><div class="lbl">Load 1m</div></div>
+    <div class="stat-pill"><div class="val" id="diskPct" style="color:var(--cyan)">--</div><div class="lbl">Disk %</div></div>
+  </div>
+
+  <!-- ═══ GRAPHS ═══ -->
+  <div class="section-title">Динаміка системи</div>
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-card-title"><span class="dot" style="background:var(--accent)"></span>CPU Usage</div>
+      <div class="chart-wrap"><canvas id="cpuChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-title"><span class="dot" style="background:var(--green)"></span>RAM Usage</div>
+      <div class="chart-wrap"><canvas id="ramChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-title"><span class="dot" style="background:var(--orange)"></span>Load Average</div>
+      <div class="chart-wrap"><canvas id="loadChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-title"><span class="dot" style="background:var(--purple)"></span>Swap Usage</div>
+      <div class="chart-wrap"><canvas id="swapChart"></canvas></div>
+    </div>
+    <div class="chart-card full">
+      <div class="chart-card-title"><span class="dot" style="background:var(--cyan)"></span>Network I/O</div>
+      <div class="chart-wrap tall"><canvas id="netChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<script>
+Chart.defaults.color = '#64748b';
+Chart.defaults.borderColor = 'rgba(30,41,59,0.5)';
+Chart.defaults.font.family = "'JetBrains Mono', monospace";
+Chart.defaults.font.size = 10;
+
+const MAX_POINTS = 120;
+const timeLabels = [];
+const cpuData = [], ramData = [], loadData = [], swapData = [], netUpData = [], netDownData = [];
+
+function gradientFill(ctx, c1, c2) {
+  const g = ctx.createLinearGradient(0, 0, 0, 220);
+  g.addColorStop(0, c1); g.addColorStop(1, c2);
+  return g;
+}
+
+function makeLineChart(ctx, datasets, yMax) {
+  return new Chart(ctx, {
+    type: 'line',
+    data: { labels: timeLabels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 300 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: datasets.length > 1, position: 'top', labels: { boxWidth: 8, padding: 10, font: { size: 9 } } } },
+      scales: {
+        x: { display: true, grid: { display: false }, ticks: { maxRotation: 0, maxTicksLimit: 10, font: { size: 8 } } },
+        y: { display: true, min: 0, max: yMax, grid: { color: 'rgba(30,41,59,0.4)' }, ticks: { font: { size: 9 } } }
+      },
+      elements: { point: { radius: 0 }, line: { tension: 0.3, borderWidth: 2 } }
+    }
+  });
+}
+
+const cpuCtx = document.getElementById('cpuChart').getContext('2d');
+const cpuChart = makeLineChart(cpuCtx, [{
+  label: 'CPU %', data: cpuData,
+  borderColor: '#3b82f6', backgroundColor: gradientFill(cpuCtx, 'rgba(59,130,246,0.25)', 'rgba(59,130,246,0.0)'),
+  fill: true
+}], 100);
+
+const ramCtx = document.getElementById('ramChart').getContext('2d');
+const ramChart = makeLineChart(ramCtx, [{
+  label: 'RAM %', data: ramData,
+  borderColor: '#22c55e', backgroundColor: gradientFill(ramCtx, 'rgba(34,197,94,0.25)', 'rgba(34,197,94,0.0)'),
+  fill: true
+}], 100);
+
+const loadCtx = document.getElementById('loadChart').getContext('2d');
+const loadChart = makeLineChart(loadCtx, [{
+  label: 'Load', data: loadData,
+  borderColor: '#f97316', backgroundColor: gradientFill(loadCtx, 'rgba(249,115,22,0.25)', 'rgba(249,115,22,0.0)'),
+  fill: true
+}], undefined);
+
+const swapCtx = document.getElementById('swapChart').getContext('2d');
+const swapChart = makeLineChart(swapCtx, [{
+  label: 'Swap %', data: swapData,
+  borderColor: '#a855f7', backgroundColor: gradientFill(swapCtx, 'rgba(168,85,247,0.25)', 'rgba(168,85,247,0.0)'),
+  fill: true
+}], 100);
+
+const netCtx = document.getElementById('netChart').getContext('2d');
+const netChart = makeLineChart(netCtx, [
+  { label: '↑ Sent (MB delta)', data: netUpData, borderColor: '#22c55e', backgroundColor: gradientFill(netCtx, 'rgba(34,197,94,0.2)', 'rgba(34,197,94,0.0)'), fill: true },
+  { label: '↓ Recv (MB delta)', data: netDownData, borderColor: '#06b6d4', backgroundColor: gradientFill(netCtx, 'rgba(6,182,212,0.2)', 'rgba(6,182,212,0.0)'), fill: true }
+], undefined);
+
+function shortTime(ts) { return ts ? ts.split(' ')[1] : ''; }
+let prevNetSent = null, prevNetRecv = null;
+
+function update(data) {
+  const s = data.system;
+  const now = shortTime(s.timestamp);
+
+  timeLabels.push(now);
+  if (timeLabels.length > MAX_POINTS) timeLabels.shift();
+
+  cpuData.push(s.cpu_percent); if (cpuData.length > MAX_POINTS) cpuData.shift();
+  ramData.push(s.memory_percent); if (ramData.length > MAX_POINTS) ramData.shift();
+  loadData.push(s.load_1); if (loadData.length > MAX_POINTS) loadData.shift();
+  swapData.push(s.swap_percent); if (swapData.length > MAX_POINTS) swapData.shift();
+
+  let netUp = 0, netDown = 0;
+  if (prevNetSent !== null) { netUp = Math.max(0, s.net_sent - prevNetSent); netDown = Math.max(0, s.net_recv - prevNetRecv); }
+  prevNetSent = s.net_sent; prevNetRecv = s.net_recv;
+  netUpData.push(netUp); if (netUpData.length > MAX_POINTS) netUpData.shift();
+  netDownData.push(netDown); if (netDownData.length > MAX_POINTS) netDownData.shift();
+
+  loadChart.options.scales.y.max = Math.max(4, s.cpu_count * 2, Math.ceil(s.load_1 * 1.5));
+
+  cpuChart.update('none');
+  ramChart.update('none');
+  loadChart.update('none');
+  swapChart.update('none');
+  netChart.update('none');
+
+  // Stat pills
+  document.getElementById('cpuPct').textContent = s.cpu_percent + '%';
+  document.getElementById('cpuPct').style.color = s.cpu_percent > 80 ? '#ef4444' : s.cpu_percent > 50 ? '#eab308' : '#3b82f6';
+  document.getElementById('ramPct').textContent = s.memory_percent + '%';
+  document.getElementById('ramPct').style.color = s.memory_percent > 80 ? '#ef4444' : s.memory_percent > 50 ? '#eab308' : '#22c55e';
+  document.getElementById('loadVal').textContent = s.load_1;
+  document.getElementById('diskPct').textContent = s.disk_percent + '%';
+
+  document.getElementById('ts').textContent = s.timestamp;
+  const dot = document.getElementById('ollamaDot');
+  dot.className = data.ollama.status === 'online' ? 'status-dot online' : 'status-dot offline';
+}
+
+fetch('/api/history').then(r => r.json()).then(data => {
+  for (const h of data) {
+    timeLabels.push(shortTime(h.t));
+    cpuData.push(h.cpu); ramData.push(h.ram); loadData.push(h.load);
+    swapData.push(h.swap || 0);
+    netUpData.push(0); netDownData.push(0);
+  }
+  cpuChart.update('none'); ramChart.update('none'); loadChart.update('none'); swapChart.update('none'); netChart.update('none');
+});
+
+function fetchData() { fetch('/api/data').then(r => r.json()).then(update).catch(console.error); }
+fetchData();
+setInterval(fetchData, 3000);
+</script>
+</body>
+</html>

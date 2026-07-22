@@ -1,0 +1,16 @@
+[Unit]
+Description=Server Dashboard
+After=network.target ollama.service
+
+[Service]
+Type=simple
+User=fox
+WorkingDirectory=/home/fox/dashboard
+ExecStart=/usr/bin/python3 /home/fox/dashboard/app.py
+Restart=always
+RestartSec=5
+Environment=BOT_TOKEN=8791345433:AAFPbDEZYOBRWN9xzI8HCOoZCIgjxz-PHyw
+Environment=CHAT_ID=1988483132
+
+[Install]
+WantedBy=multi-user.target
