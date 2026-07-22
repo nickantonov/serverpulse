@@ -33,10 +33,8 @@
     display: flex; justify-content: space-between; align-items: center;
     padding: 16px 0 24px; border-bottom: 1px solid var(--card-border); margin-bottom: 24px;
   }
-  .header-left { display: flex; align-items: center; gap: 12px; }
-  .header-logo { height: 36px; width: auto; filter: drop-shadow(0 0 8px rgba(59,130,246,0.3)); }
-  header h1 { font-size: 1.4rem; font-weight: 700; margin: 0; }
-  header h1 span { color: var(--accent); }
+  .header-logo-link { display: flex; align-items: center; }
+  .header-logo { height: 48px; width: auto; filter: drop-shadow(0 0 12px rgba(59,130,246,0.4)); }
   .header-right { display: flex; align-items: center; gap: 12px; }
   .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; animation: pulse 2s infinite; }
   .status-dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
@@ -98,10 +96,9 @@
 <div class="bg-grid"></div>
 <div class="container">
   <header>
-    <div class="header-left">
-      <img src="/img/icon.png" alt="Logo" class="header-logo">
-      <h1><span>//</span> Server Dashboard <span style="color:var(--text-dim);font-size:0.9rem">/ Графіки</span></h1>
-    </div>
+    <a href="/" class="header-logo-link">
+      <img src="/img/logo.png" alt="ServerPulse" class="header-logo">
+    </a>
     <div class="header-right">
       <span class="status-dot" id="ollamaDot"></span>
       <span class="timestamp" id="ts">loading...</span>

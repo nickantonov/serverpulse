@@ -19,9 +19,13 @@ app = Flask(__name__)
 @app.route('/favicon.ico')
 @app.route('/favicon-<size>.png')
 @app.route('/apple-touch-icon.png')
-def favicon(size=None):
-    return send_from_directory(os.path.dirname(os.path.abspath(__file__)),
-        request.path.lstrip('/'), mimetype='image/png' if size else 'image/x-icon')
+@app.route('/img/<path:filename>')
+def static_files(filename=None):
+    base = os.path.dirname(os.path.abspath(__file__))
+    if filename:
+        return send_from_directory(os.path.join(base, 'img'), filename)
+    return send_from_directory(base, request.path.lstrip('/'),
+        mimetype='image/png' if request.path.endswith('.png') else 'image/x-icon')
 
 OLLAMA_URL = "http://localhost:11434"
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8791345433:AAFPbDEZYOBRWN9xzI8HCOoZCIgjxz-PHyw")
