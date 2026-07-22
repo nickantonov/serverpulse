@@ -35,7 +35,9 @@
     display: flex; justify-content: space-between; align-items: center;
     padding: 16px 0 24px; border-bottom: 1px solid var(--card-border); margin-bottom: 24px;
   }
-  header h1 { font-size: 1.4rem; font-weight: 700; }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .header-logo { height: 36px; width: auto; filter: drop-shadow(0 0 8px rgba(59,130,246,0.3)); }
+  header h1 { font-size: 1.4rem; font-weight: 700; margin: 0; }
   header h1 span { color: var(--accent); }
   .header-right { display: flex; align-items: center; gap: 10px; }
   .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; animation: pulse 2s infinite; }
@@ -311,7 +313,10 @@
 <div class="bg-grid"></div>
 <div class="container">
   <header>
-    <h1><span>//</span> Server Dashboard</h1>
+    <div class="header-left">
+      <img src="/img/icon.png" alt="Logo" class="header-logo">
+      <h1><span>//</span> Server Dashboard</h1>
+    </div>
     <div class="header-right">
       <div class="uptime-badge"><span class="icon">⏱</span> <span id="headerUptime">--</span></div>
       <span class="status-dot" id="ollamaDot"></span>
